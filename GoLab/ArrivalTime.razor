@@ -1,0 +1,93 @@
+﻿@inject DirectionsService DirectionsService
+
+<StackLayout>
+    <StackLayout Margin="new Thickness(0, 10)">
+        <Label Text="Estimated arrival time" />
+        <Label Text="@(ArrivalDateTime.ToString("HH:mm"))"
+                FontSize="60" />
+    </StackLayout>
+    <StackLayout Margin="new Thickness(0, 10)">
+        <Label Text="I will arrive in" />
+        <Label Text="@($"{(int) MovingTimeSpan.TotalMinutes} minutes")"
+                FontSize="60" />
+    </StackLayout>
+    <StackLayout Margin="new Thickness(0, 10)"
+                 Orientation="StackOrientation.Horizontal">
+        <CheckBox @bind-IsChecked="@RideBicycle"
+                  VerticalOptions="LayoutOptions.Center"
+                  Margin="new Thickness(-7, 0, 0, 0)" />
+        <Label Text="Ride a bicycle" 
+               VerticalOptions="LayoutOptions.Center" />
+    </StackLayout>
+    <StackLayout Margin="new Thickness(0, 10)">
+        <StackLayout Orientation="StackOrientation.Horizontal">
+            <Label Text="Update interval" 
+                   HorizontalOptions="LayoutOptions.Start" />
+            <Label Text="@($"{(int) UpdateInterval} sec")" 
+                   HorizontalOptions="LayoutOptions.EndAndExpand" />
+        </StackLayout>
+        <Slider @bind-Value="UpdateInterval"
+                Minimum="5"
+                Maximum="60" />
+    </StackLayout>
+</StackLayout>
+
+@code {
+    public DateTime ArrivalDateTime;
+    public TimeSpan MovingTimeSpan;
+    public TimeSpan ElevatorTimeSpan = TimeSpan.FromSeconds(30);
+    public bool RideBicycle { get; set; }
+
+    private double updateInterval;
+    public double UpdateInterval
+    {
+        get => this.updateInterval;
+        set
+        {
+            this.updateInterval = value;
+            if (timer != null && this.updateInterval > 0)
+            {
+                timer.Interval = this.updateInterval * 1000;
+            }
+        }
+    }
+
+    private System.Timers.Timer timer;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        UpdateInterval = 10;
+
+
+        timer = new System.Timers.Timer();
+        timer.Interval = UpdateInterval * 1000;
+        timer.Elapsed += (s, e) =>
+        {
+            Device.BeginInvokeOnMainThread(async () => { await UpdateArrivalTime(); });
+        };
+        timer.Enabled = true;
+        timer.Start();
+    }
+
+
+    private async Task UpdateArrivalTime()
+    {
+        var request = new GeolocationRequest(GeolocationAccuracy.Medium);
+        var location = await Geolocation.GetLocationAsync(request);
+
+        if (location != null)
+        {
+            int distance = await DirectionsService.GetDistance(location.Latitude, location.Longitude);
+            MovingTimeSpan = TimeSpan.FromMinutes(distance / 80) + ElevatorTimeSpan;
+            if (RideBicycle)
+            {
+                MovingTimeSpan = TimeSpan.FromSeconds(MovingTimeSpan.TotalSeconds / 3);
+            }
+            ArrivalDateTime = DateTime.Now + MovingTimeSpan;
+
+            Console.WriteLine($"Latitude: {location.Latitude}, Longitude: {location.Longitude}, Altitude: {location.Altitude}, Distance: {distance}");
+        }
+    }
+}
